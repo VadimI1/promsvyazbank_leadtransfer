@@ -8,7 +8,11 @@ from rest_framework.response import Response
 from rest_framework import status
 
 
-from entries.integrations.api.serializers import CallDataInfoSerializer
+from ...integrations.api.serializers import CallDataInfoSerializer
+from ...service.validation import SkorozvonCall
+from ...service.integration import create_PSB_deal_by_call, create_my_business_deal_by_call
+from ...service.exceptions import ScenarioNotFoundError, UnsuccessfulLeadCreationError, CategoryNotFoundError, SkorozvonAPIError
+
 
 
 
@@ -48,22 +52,24 @@ class FormResponseAPI(CreateAPIView):
             for question in form_response
         ])
 
-    # def post(self, request, *args, **kwargs):
-    #     logger.info(json.dumps(request.data))
-    #     print(1)
-    #     data = flatten_data(request.data)
-    #     print(request.data.get("form_response", ""))
-    #     #data["form_response"] = self.get_str_form_response(request.data.get("form_response", "").get("answers", ""))
-    #     serializer = self.serializer_class(data=data)
-    #     if serializer.is_valid():
-    #         serializer.save()
-    #     return Response(status=status.HTTP_201_CREATED)
-
     def post(self, request, *args, **kwargs):
         logger.info(json.dumps(request.data))
-        serializer = self.serializer_class(data=flatten_data(request.data))
-        if serializer.is_valid():
+        info = flatten_data(request.data)
+        serializer = self.serializer_class(data=info)
+        if serializer.is_valid() and info['call_scenario_id'] in [50000006506, 50000014323]:
             serializer.save()
+            lead_info = SkorozvonCall.model_validate(info)
+            #print(lead_info)
+            try:
+                if lead_info.scenario_id == 50000006506: # ПСБ
+                    pass
+                    #create_PSB_deal_by_call(lead_info)
+                elif lead_info.scenario_id == 50000014323:
+                    create_my_business_deal_by_call(lead_info)
+            except (ScenarioNotFoundError, UnsuccessfulLeadCreationError, CategoryNotFoundError, SkorozvonAPIError):
+                pass
+            except Exception:
+                pass
         return Response(status=status.HTTP_201_CREATED)
 
 
